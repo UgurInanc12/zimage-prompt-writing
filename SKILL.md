@@ -11,77 +11,87 @@ metadata:
     related_skills: [comfyui-desktop-windows, ltx25-prompt-writing]
 ---
 
-# Z-Image-Turbo Prompt Yazma (resmi PE metodolojisi)
+# Z-Image-Turbo Prompt Writing (official PE methodology)
 
 ## When to Use
 
-- Z-Image-Turbo ile görsel üretirken prompt yazılacaksa (bu makinede ComfyUI
-  `image_z_image_turbo_int8` workflow'u).
-- Kullanıcı görsel fikri verdiğinde → PE prosedürüyle son prompt'u üret.
+- When writing prompts to generate images with Z-Image-Turbo (on this machine: the
+  ComfyUI `image_z_image_turbo_int8` workflow).
+- When the user gives a visual idea → produce the final prompt via the PE procedure.
 
-Kaynaklar (2026-08'de incelendi):
-- Model kartı: `https://huggingface.co/Tongyi-MAI/Z-Image-Turbo`
-- PROMPTING GUIDE (resmi takım cevapları): `.../discussions/8`
-- Resmi Prompt Enhancer (PE) şablonu: Space `.../blob/main/pe.py`
+Sources (reviewed 2026-08):
+- Model card: `https://huggingface.co/Tongyi-MAI/Z-Image-Turbo`
+- PROMPTING GUIDE (official team answers): `.../discussions/8`
+- Official Prompt Enhancer (PE) template: Space `.../blob/main/pe.py`
 
-## Model Gerçekleri (prompt'u şekillendiren farklar — LTX ile KARIŞTIRMA)
+## Model Facts (differences that shape the prompt: do NOT confuse with LTX)
 
-- **Negatif prompt YOK**: few-step distilled (Decoupled-DMD + DMDR/RL), CFG-free inference.
-  Diffusers'ta `guidance_scale=0.0`, ComfyUI'da `cfg=1`. Negatif prompt yazmak zaman kaybıdır,
-  model onu görmez. (Z-Image TEMEL modeli CFG + negatif prompt destekler; Turbo desteklemez.)
-- **Uzun ve detaylı prompt en iyisi** — resmi tavsiye: "long and detailed prompts".
-- **Dil: İngilizce tercih et** (topluluk doğrulaması: aynı sahne İngilizce PE çıktısıyla çok
-  daha iyi). Çince render güçlüdür — render edilecek metin prompt'ta iki dilde de yazılabilir.
-- **Metin render'ı GÜÇLÜ yan**: LTX'in tam tersi — görseldeki metni prompt'ta tırnak içinde
-  aynen yaz (bkz. PE adım 4).
-- **Token bütçesi**: demo 512 token; lokal 1024 (`max_sequence_length=1024`). ~0.75 kelime/token
-  → 512 tok ≈ 380 kelime; 1024 tok ≈ 750 kelime. TE = Qwen3-4B (ComfyUI'da `lumina2` tipi).
-- **Yüksek determinizm**: aynı prompt benzer render verir; çeşitlilik için prompt'a ANLAMLI
-  yeni detay ekle (cfg ayarı işe yaramaz — zaten 0). Seed değişimi sınırlı varyasyon verir.
-- **Adımlar**: 9 API adımı = 8 DiT forward (ComfyUI'da `steps=8`).
-- **Mimari**: 6B S3-DiT (single-stream) — metin + görsel tokenlar tek akışta; metin
-  kompozisyona doğrudan işler.
-- İlham galerisi: `https://zimage.net/inspiration` (kopyalanabilir prompt'lar).
+- **No negative prompt**: few-step distilled (Decoupled-DMD + DMDR/RL), CFG-free
+  inference. In Diffusers `guidance_scale=0.0`, in ComfyUI `cfg=1`. Writing a negative
+  prompt is a waste of time, the model never sees it. (The Z-Image BASE model supports
+  CFG + negative prompts; Turbo does not.)
+- **Long and detailed prompts work best** (official advice: "long and detailed prompts").
+- **Language: prefer English** (community-verified: the same scene comes out much better
+  with an English PE output). Chinese rendering is strong (text to be rendered can be
+  written in the prompt in either language).
+- **Text rendering is a STRONG side**: the opposite of LTX (write any text that should
+  appear in the image verbatim, in quotes, in the prompt; see PE step 4).
+- **Token budget**: demo 512 tokens; local 1024 (`max_sequence_length=1024`).
+  ~0.75 words/token → 512 tok ≈ 380 words; 1024 tok ≈ 750 words. TE = Qwen3-4B
+  (`lumina2` type in ComfyUI).
+- **High determinism**: the same prompt gives a similar render; for variety, add
+  MEANINGFUL new details to the prompt (the cfg setting does nothing, it is already 0).
+  Seed changes give limited variation.
+- **Steps**: 9 API steps = 8 DiT forwards (`steps=8` in ComfyUI).
+- **Architecture**: 6B S3-DiT (single-stream): text + visual tokens in a single stream;
+  text feeds directly into composition.
+- Inspiration gallery: `https://zimage.net/inspiration` (copyable prompts).
 
-## Resmi PE (Prompt Enhancer) Metodolojisi — 4 adım
+## Official PE (Prompt Enhancer) Methodology: 4 steps
 
-Benim görevim pe.py'deki rolü bizzat oynamak: "mantık kafesindeki vizyoner sanatçı" —
-kullanıcı niyetine sadık, detay dolu, estetik, doğrudan T2I'ya girebilen ultimat görsel
-betimleme üretmek.
+My job is to personally play the role from pe.py: the "visionary artist in a logic
+cage" (produce an ultimate visual description that is faithful to the user's intent,
+full of detail, aesthetic, and directly usable by T2I).
 
-1. **Çekirdek unsurları kilitle** — kullanıcı prompt'undaki DEĞİŞMEZ unsurlar: özne, sayı,
-   eylem, durum + belirtilen IP isimleri, renkler, metinler. Bunlar mutlak korunur.
-2. **Üretken akıl yürütme kararı** — istek doğrudan sahne değil de çözüm gerektiriyorsa
-   ("X nedir?", "tasarla", "şu sorunun çözümünü göster"): önce zihninde TAM, somut,
-   görselleştirilebilir bir plan kur; betimleme bunun üzerine inşa edilir.
-3. **Profesyonel estetik + gerçekçilik enjeksiyonu** — beş eksen:
-   kompozisyon · ışık/gölge atmosferi · malzeme/doku · renk şeması · katmanlı mekân derinliği.
-4. **Metin elemanlarının kesin işlenmesi (KRİTİK)** —
-   - Final görselde görünmesi istenen TÜM metni kelimesi kelimesine yaz, İngilizce çift
-     tırnak içinde: `"..."` (açık üretim talimatı).
-   - Poster/menü/UI gibi tasarım işlerinde: tüm metin + font + tipografi/düzen.
-   - Sahnedeki tabela/ekran/yol işareti metinleri: içerik + konum, boyut, malzeme.
-   - Kendi akıl yürütmende eklediğin metinler (grafik, çözüm adımları): aynı kurallar.
-   - Metin yoksa → tüm enerji saf görsel detaya.
+1. **Lock the core elements** (the IMMUTABLE elements of the user's prompt): subject,
+   count, action, state + any specified IP names, colors, texts. These are absolutely
+   preserved.
+2. **Generative reasoning decision** (when the request is not a direct scene but
+   requires a solution, e.g. "what is X?", "design", "show the solution to this
+   problem"): first build a COMPLETE, concrete, visualizable plan in your mind; the
+   description is built on top of it.
+3. **Professional aesthetic + realism injection** (five axes):
+   composition · light/shadow atmosphere · material/texture · color scheme · layered
+   spatial depth.
+4. **Precise handling of text elements (CRITICAL)**:
+   - Write ALL text that should appear in the final image verbatim, in English double
+     quotes: `"..."` (an explicit generation instruction).
+   - For design work like posters/menus/UI: all text + font + typography/layout.
+   - Text on signs/screens/road signs in the scene: content + position, size, material.
+   - Text you added in your own reasoning (charts, solution steps): same rules.
+   - If there is no text → all energy goes to pure visual detail.
 
-## Çıktı Kuralları (PE'nin katı şartları)
+## Output Rules (PE's strict requirements)
 
-- Objektif ve somut. Metafor YASAK, duygusal retorik YASAK.
-- `"8K"`, `"masterpiece"` gibi meta etiketler ve çizim talimatları YASAK.
-- Sadece final prompt çıkar — açıklama, önsöz, alternatif YOK.
+- Objective and concrete. Metaphors FORBIDDEN, emotional rhetoric FORBIDDEN.
+- Meta tags like `"8K"`, `"masterpiece"` and drawing instructions FORBIDDEN.
+- Output ONLY the final prompt (no explanation, no preamble, no alternatives).
 
-## Prompt İnşa Prosedürü (fikir → final prompt)
+## Prompt Construction Procedure (idea → final prompt)
 
-1. Fikri al → çekirdek unsurları kilitle (özne/sayı/eylem/renk/metin).
-2. "Üretken akıl yürütme" gerekir mi? (tasarım/çözüm istekleri) → önce görselleştirilebilir plan.
-3. 5 eksende estetik detay ekle (kompozisyon, ışık, doku, renk, derinlik).
-4. Metin audit: görselde metin varsa tırnak içinde aynen yaz (+font/düzen gerekirse).
-5. İngilizce yaz; token bütçesini tut (hedef ~100-380 kelime; uzun işler 750'ye kadar).
-6. Negatif prompt YAZMA. Meta etiket kullanma.
-7. ComfyUI parametreleri (bu makine): steps=8, cfg=1, 1024x1024, sampler res_multistep /
+1. Take the idea → lock the core elements (subject/count/action/color/text).
+2. Is "generative reasoning" needed? (design/solution requests) → first a visualizable
+   plan.
+3. Add aesthetic detail on the 5 axes (composition, light, texture, color, depth).
+4. Text audit: if the image has text, write it verbatim in quotes (+font/layout if
+   needed).
+5. Write in English; stay within the token budget (target ~100-380 words; long jobs up
+   to 750).
+6. Do NOT write a negative prompt. Do not use meta tags.
+7. ComfyUI parameters (this machine): steps=8, cfg=1, 1024x1024, sampler res_multistep /
    scheduler simple, TE `qwen_3_4b_fp8_mixed` (lumina2), UNET `z_image_turbo_int8_convrot`.
 
-## Örnek stil (README'den — resmi showcase prompt'u)
+## Example style (from the README: official showcase prompt)
 
 > Young Chinese woman in red Hanfu, intricate embroidery. Impeccable makeup, red floral
 > forehead pattern. Elaborate high bun, golden phoenix headdress, red flowers, beads. Holds
@@ -89,11 +99,12 @@ betimleme üretmek.
 > above extended left palm. Soft-lit outdoor night background, silhouetted tiered pagoda
 > (西安大雁塔), blurred colorful distant lights.
 
-Not: kısa cümleler, somut nesneler, ışık + arka plan detayı, Çince metin doğrudan prompt'ta.
+Note: short sentences, concrete objects, light + background detail, Chinese text directly
+in the prompt.
 
-## Destek dosyaları
+## Supporting files
 
-- `references/pe-template.md` — pe.py şablonunun orijinal Çince metni + İngilizce çalışma
-  çevirisi (birebir kullanılabilir).
-- `references/model-notes.md` — model kartı + discussions/8'in distillenmiş notları
-  (token matematiği, determinizm, ComfyUI token kontrol node'ları, offline PE yöntemleri).
+- `references/pe-template.md` (original Chinese text of the pe.py template + English
+  working translation, usable verbatim).
+- `references/model-notes.md` (distilled notes from the model card + discussions/8: token
+  math, determinism, ComfyUI token control nodes, offline PE methods).
